@@ -1099,4 +1099,57 @@
   }
 }
 
+/* Grid do Perfil (3 colunas) — responsividade */
+@media (max-width: 1280px) {
+  .perfil-grid-novo {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .section-planos {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 768px) {
+  .perfil-grid-novo {
+    grid-template-columns: 1fr !important;
+  }
+  .section-planos {
+    grid-column: span 1;
+  }
+}
+
+/* Hover nos itens de plano alimentar */
+.plano-historico-item:hover {
+  background: white !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.08);
+  transform: translateX(3px);
+}
+
+/* Gráfico de peso */
+.grafico-container {
+  width: 100%;
+  min-height: 160px;
+}
+
+.grafico-vazio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem;
+  color: var(--text);
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+/* Scroll customizado nas listas de consulta */
+.consult-scroll-container::-webkit-scrollbar {
+  width: 5px;
+}
+.consult-scroll-container::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 10px;
+}
 

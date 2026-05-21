@@ -18,14 +18,77 @@ import {
   Moon, 
   Dumbbell, 
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Save,
+  Plus,
+  TrendingUp,
+  X,
+  ChevronRight,
+  ClipboardList
 } from 'lucide-react'
+
+// Helper para tratar inputs numéricos com vírgula e retornos inválidos
+const parseInputFloat = (valor) => {
+  if (valor === undefined || valor === null || valor === '') return null
+  const str = String(valor).replace(',', '.')
+  const num = parseFloat(str)
+  return isNaN(num) ? null : num
+}
 
 export default function PerfilPacienteView({ pacienteId, onBack, onEdit }) {
   const [paciente, setPaciente] = useState(null)
   const [consultas, setConsultas] = useState([])
+  const [planos, setPlanos] = useState([])
   const [loading, setLoading] = useState(true)
+  const [savingPaciente, setSavingPaciente] = useState(false)
   const [error, setError] = useState(null)
+  const [sucessoMsg, setSucessoMsg] = useState(null)
+  
+  // Abas de Dados do Paciente
+  const [activeAba, setActiveAba] = useState('pessoal') // 'pessoal' | 'clinico' | 'habitos'
+
+  // Estados de Formulário do Paciente (Edição inline)
+  const [formPaciente, setFormPaciente] = useState({
+    nome: '',
+    data_nascimento: '',
+    sexo: '',
+    whatsapp: '',
+    email: '',
+    peso_inicial: '',
+    altura: '',
+    nivel_atividade: '',
+    medicamentos: '',
+    suplementos: '',
+    objetivos: [],
+    objetivo_texto: '',
+    patologias: [],
+    restricoes_alimentares: [],
+    alergias: [],
+    refeicoes_por_dia: '',
+    litros_agua: '',
+    horario_acorda: '',
+    horario_dorme: '',
+    atividade_fisica: false,
+    atividade_fisica_descricao: '',
+    observacoes: ''
+  })
+
+  // Estado do Modal de Nova Consulta
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [formConsulta, setFormConsulta] = useState({
+    data_consulta: new Date().toISOString().split('T')[0],
+    peso: '',
+    cintura: '',
+    quadril: '',
+    percentual_gordura: '',
+    observacoes: '',
+    proximo_retorno: ''
+  })
+  const [savingConsulta, setSavingConsulta] = useState(false)
+  const [consultaError, setConsultaError] = useState(null)
+
+  // Estado do Visualizador de Planos Alimentares
+  const [selectedPlano, setSelectedPlano] = useState(null)
 
   useEffect(() => {
     if (pacienteId) {
@@ -38,7 +101,7 @@ export default function PerfilPacienteView({ pacienteId, onBack, onEdit }) {
       setLoading(true)
       setError(null)
 
-      // Buscar dados do paciente
+      // 1. Buscar dados do paciente
       const { data: pacienteData, error: pacienteError } = await supabase
         .from('pacientes')
         .select('*')
@@ -47,8 +110,34 @@ export default function PerfilPacienteView({ pacienteId, onBack, onEdit }) {
 
       if (pacienteError) throw pacienteError
       setPaciente(pacienteData)
+      
+      // Popular formulário de edição
+      setFormPaciente({
+        nome: pacienteData.nome || '',
+        data_nascimento: pacienteData.data_nascimento || '',
+        sexo: pacienteData.sexo || '',
+        whatsapp: pacienteData.whatsapp || '',
+        email: pacienteData.email || '',
+        peso_inicial: pacienteData.peso_inicial !== null ? String(pacienteData.peso_inicial) : '',
+        altura: pacienteData.altura !== null ? String(pacienteData.altura) : '',
+        nivel_atividade: pacienteData.nivel_atividade || '',
+        medicamentos: pacienteData.medicamentos || '',
+        suplementos: pacienteData.suplementos || '',
+        objetivos: pacienteData.objetivos || [],
+        objetivo_texto: pacienteData.objetivo_texto || '',
+        patologias: pacienteData.patologias || [],
+        restricoes_alimentares: pacienteData.restricoes_alimentares || [],
+        alergias: pacienteData.alergias || [],
+        refeicoes_por_dia: pacienteData.refeicoes_por_dia !== null ? String(pacienteData.refeicoes_por_dia) : '',
+        litros_agua: pacienteData.litros_agua !== null ? String(pacienteData.litros_agua) : '',
+        horario_acorda: pacienteData.horario_acorda || '',
+        horario_dorme: pacienteData.horario_dorme || '',
+        atividade_fisica: !!pacienteData.atividade_fisica,
+        atividade_fisica_descricao: pacienteData.atividade_fisica_descricao || '',
+        observacoes: pacienteData.observacoes || ''
+      })
 
-      // Buscar histórico de consultas
+      // 2. Buscar histórico de consultas
       const { data: consultasData, error: consultasError } = await supabase
         .from('consultas')
         .select('*')
@@ -58,12 +147,298 @@ export default function PerfilPacienteView({ pacienteId, onBack, onEdit }) {
       if (consultasError) throw consultasError
       setConsultas(consultasData || [])
 
+      // 3. Buscar histórico de planos alimentares
+      const { data: planosData, error: planosError } = await supabase
+        .from('planos_alimentares')
+        .select('*')
+        .eq('paciente_id', pacienteId)
+        .order('created_at', { ascending: false })
+
+      if (planosError) throw planosError
+      setPlanos(planosData || [])
+
     } catch (err) {
       console.error('Erro ao buscar dados do perfil:', err)
       setError('Erro ao carregar o perfil do paciente.')
     } finally {
       setLoading(false)
     }
+  }
+
+  // Ações de salvamento de dados do paciente
+  async function handleSalvarPaciente(e) {
+    e.preventDefault()
+    setSavingPaciente(true)
+    setSucessoMsg(null)
+    setError(null)
+
+    try {
+      const pesoFinal = parseInputFloat(formPaciente.peso_inicial)
+      let alturaFinal = parseInputFloat(formPaciente.altura)
+
+      if (alturaFinal && alturaFinal > 0.5 && alturaFinal < 3.0) {
+        alturaFinal = alturaFinal * 100
+      }
+
+      const payload = {
+        nome: formPaciente.nome,
+        data_nascimento: formPaciente.data_nascimento || null,
+        sexo: formPaciente.sexo || null,
+        whatsapp: formPaciente.whatsapp || null,
+        email: formPaciente.email || null,
+        peso_inicial: pesoFinal,
+        altura: alturaFinal,
+        nivel_atividade: formPaciente.nivel_atividade || null,
+        medicamentos: formPaciente.medicamentos || null,
+        suplementos: formPaciente.suplementos || null,
+        objetivos: formPaciente.objetivos,
+        objetivo_texto: formPaciente.objetivo_texto || null,
+        patologias: formPaciente.patologias,
+        restricoes_alimentares: formPaciente.restricoes_alimentares,
+        alergias: formPaciente.alergias,
+        refeicoes_por_dia: formPaciente.refeicoes_por_dia ? parseInt(formPaciente.refeicoes_por_dia) : null,
+        litros_agua: formPaciente.litros_agua ? parseFloat(formPaciente.litros_agua) : null,
+        horario_acorda: formPaciente.horario_acorda || null,
+        horario_dorme: formPaciente.horario_dorme || null,
+        atividade_fisica: formPaciente.atividade_fisica,
+        atividade_fisica_descricao: formPaciente.atividade_fisica ? formPaciente.atividade_fisica_descricao : null,
+        observacoes: formPaciente.observacoes || null
+      }
+
+      const { data, error: updateError } = await supabase
+        .from('pacientes')
+        .update(payload)
+        .eq('id', pacienteId)
+        .select()
+
+      if (updateError) throw updateError
+      if (data && data[0]) {
+        setPaciente(data[0])
+      }
+
+      setSucessoMsg('Alterações salvas com sucesso!')
+      setTimeout(() => setSucessoMsg(null), 3000)
+    } catch (err) {
+      console.error('Erro ao atualizar paciente:', err)
+      setError('Erro ao salvar alterações no banco de dados.')
+    } finally {
+      setSavingPaciente(false)
+    }
+  }
+
+  // Ações de cadastro de nova consulta
+  async function handleSalvarConsulta(e) {
+    e.preventDefault()
+    if (!formConsulta.peso) {
+      setConsultaError('O peso atual é obrigatório.')
+      return
+    }
+
+    setSavingConsulta(true)
+    setConsultaError(null)
+
+    try {
+      const payload = {
+        paciente_id: pacienteId,
+        data_consulta: formConsulta.data_consulta,
+        peso: parseInputFloat(formConsulta.peso),
+        cintura: parseInputFloat(formConsulta.cintura) || null,
+        quadril: parseInputFloat(formConsulta.quadril) || null,
+        percentual_gordura: parseInputFloat(formConsulta.percentual_gordura) || null,
+        observacoes: formConsulta.observacoes || null,
+        proximo_retorno: formConsulta.proximo_retorno || null
+      }
+
+      const { error: insertError } = await supabase
+        .from('consultas')
+        .insert([payload])
+
+      if (insertError) throw insertError
+
+      // Fechar modal e limpar formulário
+      setIsModalOpen(false)
+      setFormConsulta({
+        data_consulta: new Date().toISOString().split('T')[0],
+        peso: '',
+        cintura: '',
+        quadril: '',
+        percentual_gordura: '',
+        observacoes: '',
+        proximo_retorno: ''
+      })
+
+      // Recarregar dados de consultas do banco para sincronizar tudo em tempo real
+      const { data: novasConsultas, error: reloadError } = await supabase
+        .from('consultas')
+        .select('*')
+        .eq('paciente_id', pacienteId)
+        .order('data_consulta', { ascending: false })
+
+      if (reloadError) throw reloadError
+      setConsultas(novasConsultas || [])
+
+    } catch (err) {
+      console.error('Erro ao cadastrar consulta:', err)
+      setConsultaError('Erro ao registrar consulta. Tente novamente.')
+    } finally {
+      setSavingConsulta(false)
+    }
+  }
+
+  const formatarData = (dataStr) => {
+    if (!dataStr) return 'N/A'
+    const [ano, mes, dia] = dataStr.split('-')
+    return `${dia}/${mes}/${ano}`
+  }
+
+  const formatarDataCompleta = (dateStr) => {
+    if (!dateStr) return 'N/A'
+    const data = new Date(dateStr)
+    return data.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  // Cálculo da Idade
+  const calcularIdade = (dataNasc) => {
+    if (!dataNasc) return ''
+    const hoje = new Date()
+    const nascimento = new Date(dataNasc + 'T00:00:00')
+    let idadeCalculada = hoje.getFullYear() - nascimento.getFullYear()
+    const mes = hoje.getMonth() - nascimento.getMonth()
+    if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
+      idadeCalculada--
+    }
+    return idadeCalculada >= 0 ? ` (${idadeCalculada} anos)` : ''
+  }
+
+  // Manipulação de Checkboxes/Arrays para objetivos, patologias, etc.
+  const handleAbaCheckboxChange = (campo, valor) => {
+    let listaAtual = [...formPaciente[campo]]
+    if (listaAtual.includes(valor)) {
+      listaAtual = listaAtual.filter(item => item !== valor)
+    } else {
+      listaAtual.push(valor)
+    }
+    setFormPaciente(prev => ({ ...prev, [campo]: listaAtual }))
+  }
+
+  // Render do Gráfico SVG de Evolução de Peso
+  const renderGraficoPeso = () => {
+    if (consultas.length === 0) {
+      return (
+        <div className="grafico-vazio">
+          <TrendingUp size={48} style={{ color: 'var(--text)', opacity: 0.3 }} />
+          <p>Nenhuma consulta registrada ainda</p>
+        </div>
+      )
+    }
+
+    // Ordenar cronologicamente do mais antigo para o mais recente para plotar o gráfico
+    const consultasOrdenadas = [...consultas]
+      .filter(c => c.peso !== null)
+      .sort((a, b) => new Date(a.data_consulta) - new Date(b.data_consulta))
+
+    if (consultasOrdenadas.length === 0) {
+      return (
+        <div className="grafico-vazio">
+          <TrendingUp size={48} style={{ color: 'var(--text)', opacity: 0.3 }} />
+          <p>Nenhum registro de peso nas consultas</p>
+        </div>
+      )
+    }
+
+    // Configurações do SVG
+    const width = 500
+    const height = 180
+    const paddingLeft = 40
+    const paddingRight = 20
+    const paddingTop = 20
+    const paddingBottom = 30
+
+    const pesos = consultasOrdenadas.map(c => Number(c.peso))
+    const minPeso = Math.min(...pesos) - 2
+    const maxPeso = Math.max(...pesos) + 2
+    const rangePeso = maxPeso - minPeso || 1
+
+    const getX = (index) => {
+      if (consultasOrdenadas.length === 1) return paddingLeft + (width - paddingLeft - paddingRight) / 2
+      return paddingLeft + (index / (consultasOrdenadas.length - 1)) * (width - paddingLeft - paddingRight)
+    }
+
+    const getY = (peso) => {
+      return height - paddingBottom - ((peso - minPeso) / rangePeso) * (height - paddingTop - paddingBottom)
+    }
+
+    // Gerar string de caminho do SVG (Path)
+    let pathD = ''
+    consultasOrdenadas.forEach((c, index) => {
+      const x = getX(index)
+      const y = getY(Number(c.peso))
+      if (index === 0) {
+        pathD += `M ${x} ${y}`
+      } else {
+        pathD += ` L ${x} ${y}`
+      }
+    })
+
+    // Gerar a área sob a curva (para gradiente bonito)
+    let areaD = ''
+    if (consultasOrdenadas.length > 0) {
+      const firstX = getX(0)
+      const lastX = getX(consultasOrdenadas.length - 1)
+      const bottomY = height - paddingBottom
+      areaD = `${pathD} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`
+    }
+
+    return (
+      <div className="grafico-container" style={{ position: 'relative' }}>
+        <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%" style={{ overflow: 'visible' }}>
+          <defs>
+            <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          {/* Linhas de grade horizontal */}
+          <line x1={paddingLeft} y1={getY(minPeso)} x2={width - paddingRight} y2={getY(minPeso)} stroke="#f1f5f9" strokeWidth="1" />
+          <line x1={paddingLeft} y1={getY((minPeso + maxPeso) / 2)} x2={width - paddingRight} y2={getY((minPeso + maxPeso) / 2)} stroke="#f1f5f9" strokeWidth="1" />
+          <line x1={paddingLeft} y1={getY(maxPeso)} x2={width - paddingRight} y2={getY(maxPeso)} stroke="#f1f5f9" strokeWidth="1" />
+
+          {/* Área preenchida */}
+          {consultasOrdenadas.length > 1 && (
+            <path d={areaD} fill="url(#areaGradient)" />
+          )}
+
+          {/* Linha principal */}
+          <path d={pathD} fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+
+          {/* Pontos de dados */}
+          {consultasOrdenadas.map((c, index) => {
+            const x = getX(index)
+            const y = getY(Number(c.peso))
+            return (
+              <g key={c.id}>
+                <circle cx={x} cy={y} r="5" fill="white" stroke="var(--accent)" strokeWidth="3" />
+                {/* Rótulo de peso acima do ponto */}
+                <text x={x} y={y - 8} textAnchor="middle" fontSize="10" fontWeight="bold" fill="var(--text-h)">
+                  {c.peso} kg
+                </text>
+                {/* Rótulo de data no eixo X */}
+                <text x={x} y={height - 8} textAnchor="middle" fontSize="9" fontWeight="600" fill="var(--text)" opacity="0.8">
+                  {c.data_consulta.split('-')[2]}/{c.data_consulta.split('-')[1]}
+                </text>
+              </g>
+            )
+          })}
+        </svg>
+      </div>
+    )
   }
 
   if (loading) {
@@ -86,396 +461,631 @@ export default function PerfilPacienteView({ pacienteId, onBack, onEdit }) {
     )
   }
 
-  // Formatação de data simples
-  const formatarData = (dataStr) => {
-    if (!dataStr) return 'N/A'
-    const [ano, mes, dia] = dataStr.split('-')
-    return `${dia}/${mes}/${ano}`
-  }
-
-  // Helper para cálculo da Idade
-  const calcularIdade = (dataNasc) => {
-    if (!dataNasc) return ''
-    const hoje = new Date()
-    const nascimento = new Date(dataNasc + 'T00:00:00')
-    let idadeCalculada = hoje.getFullYear() - nascimento.getFullYear()
-    const mes = hoje.getMonth() - nascimento.getMonth()
-    if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
-      idadeCalculada--
-    }
-    return idadeCalculada >= 0 ? ` (${idadeCalculada} anos)` : ''
-  }
-
-  // Helper para cálculo de IMC e classificação colorida
-  const obterImcData = (peso, altura) => {
-    if (!peso || !altura) return null
-    let altM = altura
-    // Ajuste inteligente: se tiver em cm (ex: 175), converte para metros (1.75)
-    if (altM > 3.0) {
-      altM = altM / 100
-    }
-    const imcValor = peso / (altM * altM)
-    const imcFmt = imcValor.toFixed(2)
-    
-    let classe = ''
-    let cor = ''
-    let bgCor = ''
-    if (imcValor < 18.5) {
-      classe = 'Abaixo do peso'
-      cor = '#2563eb'
-      bgCor = '#dbeafe'
-    } else if (imcValor < 25) {
-      classe = 'Peso normal'
-      cor = '#16a34a'
-      bgCor = '#dcfce7'
-    } else if (imcValor < 30) {
-      classe = 'Sobrepeso'
-      cor = '#d97706'
-      bgCor = '#fef3c7'
-    } else if (imcValor < 35) {
-      classe = 'Obesidade Grau I'
-      cor = '#ea580c'
-      bgCor = '#ffedd5'
-    } else if (imcValor < 40) {
-      classe = 'Obesidade Grau II'
-      cor = '#dc2626'
-      bgCor = '#fee2e2'
-    } else {
-      classe = 'Obesidade Grau III'
-      cor = '#991b1b'
-      bgCor = '#fecaca'
-    }
-    return { imc: imcFmt, classe, cor, bgCor }
-  }
-
-  const imcCalculado = obterImcData(paciente.peso_inicial, paciente.altura)
-
   return (
-    <div className="perfil-container">
-      <header className="perfil-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+    <div className="perfil-container" style={{ paddingBottom: '4rem' }}>
+      {/* Header com botão voltar */}
+      <header className="perfil-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '2.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
           <button className="btn-back" onClick={onBack} title="Voltar">
             <ArrowLeft size={20} />
             <span>Voltar para Pacientes</span>
           </button>
-          <h1 className="perfil-title">Perfil do Paciente</h1>
+          <h1 className="perfil-title" style={{ margin: 0 }}>Ficha do Paciente</h1>
         </div>
-        
-        {/* Botão de Editar Dados */}
-        <button className="btn-primary" onClick={onEdit} style={{ gap: '0.6rem' }}>
-          <Pencil size={18} />
-          <span>Editar Dados</span>
-        </button>
       </header>
 
-      <div className="perfil-grid">
-        {/* Card de Dados Pessoais */}
-        <section className="perfil-card personal-info">
-          <div className="avatar-large">
-            {paciente.nome?.charAt(0).toUpperCase()}
-          </div>
-          <h2>{paciente.nome}</h2>
-          
-          <div className="info-list">
-            <div className="info-item">
-              <Mail size={18} />
-              <div>
-                <label>Email</label>
-                <span>{paciente.email || 'Não informado'}</span>
-              </div>
-            </div>
-            <div className="info-item">
-              <Phone size={18} />
-              <div>
-                <label>WhatsApp</label>
-                <span>{paciente.whatsapp || 'Não informado'}</span>
-              </div>
-            </div>
-            <div className="info-item">
-              <Calendar size={18} />
-              <div>
-                <label>Data de Nascimento</label>
-                <span>{formatarData(paciente.data_nascimento)}{calcularIdade(paciente.data_nascimento)}</span>
-              </div>
-            </div>
-            <div className="info-item">
-              <User size={18} />
-              <div>
-                <label>Sexo</label>
-                <span>{paciente.sexo || 'Não informado'}</span>
-              </div>
-            </div>
-          </div>
-          
-          {/* Objetivos Alimentares em Chips */}
-          {paciente.objetivos && paciente.objetivos.length > 0 && (
-            <div className="objetivo-seccao" style={{ marginBottom: '1rem', width: '100%' }}>
-              <h3>Objetivos Alimentares</h3>
-              <div className="chip-group" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.6rem' }}>
-                {paciente.objetivos.map((obj, idx) => (
-                  <span key={idx} className="chip chip-objetivo" style={{
-                    background: 'rgba(212, 180, 131, 0.15)',
-                    color: '#8b6e37',
-                    padding: '0.4rem 0.8rem',
-                    borderRadius: '50px',
-                    fontSize: '0.8rem',
-                    fontWeight: '700',
-                    border: '1px solid rgba(212, 180, 131, 0.3)'
-                  }}>{obj}</span>
-                ))}
-              </div>
-            </div>
-          )}
+      {sucessoMsg && (
+        <div className="sucesso-alert-floating" style={{
+          background: '#dcfce7',
+          color: '#15803d',
+          padding: '1rem 1.5rem',
+          borderRadius: '12px',
+          border: '1px solid #bbf7d0',
+          fontWeight: '700',
+          marginBottom: '1.5rem',
+          textAlign: 'left',
+          animation: 'fadeIn 0.3s'
+        }}>
+          {sucessoMsg}
+        </div>
+      )}
 
-          {paciente.objetivo_texto && (
-            <div className="objetivo-seccao" style={{ width: '100%' }}>
-              <h3>Detalhamento do Objetivo</h3>
-              <p style={{ margin: '0.5rem 0 0 0' }}>{paciente.objetivo_texto}</p>
+      {/* Grid Geral de 3 colunas ou seções */}
+      <div className="perfil-grid-novo" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.2fr 0.9fr', gap: '2rem', alignItems: 'start' }}>
+        
+        {/* SEÇÃO 1: DADOS DO PACIENTE */}
+        <section className="perfil-card-novo section-dados" style={{ background: 'white', borderRadius: '20px', border: '1px solid var(--border)', padding: '2rem', boxShadow: 'var(--shadow)', textAlign: 'left' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+            <div className="avatar-large" style={{ width: '48px', height: '48px', borderRadius: '14px', fontSize: '1.4rem', margin: 0 }}>
+              {paciente.nome?.charAt(0).toUpperCase()}
             </div>
-          )}
+            <div>
+              <h2 style={{ fontSize: '1.3rem', fontWeight: '800', margin: 0, color: 'var(--text-h)' }}>{paciente.nome}</h2>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text)', opacity: 0.8 }}>Cadastro em {formatarData(paciente.created_at?.split('T')[0])}</span>
+            </div>
+          </div>
+
+          {/* Abas internas de dados */}
+          <div className="perfil-aba-menu" style={{ display: 'flex', borderBottom: '1px solid var(--border)', gap: '1rem', marginBottom: '1.5rem' }}>
+            {['pessoal', 'clinico', 'habitos'].map(aba => (
+              <button
+                key={aba}
+                type="button"
+                onClick={() => setActiveAba(aba)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '0.6rem 0.2rem',
+                  fontSize: '0.9rem',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  color: activeAba === aba ? 'var(--accent)' : 'var(--text)',
+                  borderBottom: activeAba === aba ? '3px solid var(--accent)' : '3px solid transparent',
+                  marginBottom: '-1px',
+                  textTransform: 'capitalize'
+                }}
+              >
+                {aba}
+              </button>
+            ))}
+          </div>
+
+          {/* Form de Edição Direta de Dados */}
+          <form onSubmit={handleSalvarPaciente}>
+            {activeAba === 'pessoal' && (
+              <div className="aba-perfil-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                <div className="form-group-perfil">
+                  <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Nome Completo *</label>
+                  <input
+                    type="text"
+                    required
+                    value={formPaciente.nome}
+                    onChange={(e) => setFormPaciente(prev => ({ ...prev, nome: e.target.value }))}
+                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                  />
+                </div>
+                <div className="form-group-perfil">
+                  <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Data de Nascimento</label>
+                  <input
+                    type="date"
+                    value={formPaciente.data_nascimento}
+                    onChange={(e) => setFormPaciente(prev => ({ ...prev, data_nascimento: e.target.value }))}
+                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                  />
+                </div>
+                <div className="form-group-perfil">
+                  <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Sexo</label>
+                  <select
+                    value={formPaciente.sexo}
+                    onChange={(e) => setFormPaciente(prev => ({ ...prev, sexo: e.target.value }))}
+                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="Feminino">Feminino</option>
+                    <option value="Masculino">Masculino</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+                </div>
+                <div className="form-group-perfil">
+                  <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>E-mail</label>
+                  <input
+                    type="email"
+                    value={formPaciente.email}
+                    onChange={(e) => setFormPaciente(prev => ({ ...prev, email: e.target.value }))}
+                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                  />
+                </div>
+                <div className="form-group-perfil">
+                  <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>WhatsApp</label>
+                  <input
+                    type="text"
+                    value={formPaciente.whatsapp}
+                    onChange={(e) => setFormPaciente(prev => ({ ...prev, whatsapp: e.target.value }))}
+                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeAba === 'clinico' && (
+              <div className="aba-perfil-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group-perfil">
+                    <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Peso (kg)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={formPaciente.peso_inicial}
+                      onChange={(e) => setFormPaciente(prev => ({ ...prev, peso_inicial: e.target.value }))}
+                      style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                    />
+                  </div>
+                  <div className="form-group-perfil">
+                    <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Altura (cm)</label>
+                    <input
+                      type="number"
+                      value={formPaciente.altura}
+                      onChange={(e) => setFormPaciente(prev => ({ ...prev, altura: e.target.value }))}
+                      style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group-perfil">
+                  <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Nível de Atividade</label>
+                  <select
+                    value={formPaciente.nivel_atividade}
+                    onChange={(e) => setFormPaciente(prev => ({ ...prev, nivel_atividade: e.target.value }))}
+                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="Sedentário">Sedentário</option>
+                    <option value="Levemente ativo">Levemente ativo</option>
+                    <option value="Moderadamente ativo">Moderadamente ativo</option>
+                    <option value="Muito ativo">Muito ativo</option>
+                    <option value="Extremamente ativo">Extremamente ativo</option>
+                  </select>
+                </div>
+
+                <div className="form-group-perfil">
+                  <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Medicamentos</label>
+                  <input
+                    type="text"
+                    value={formPaciente.medicamentos}
+                    onChange={(e) => setFormPaciente(prev => ({ ...prev, medicamentos: e.target.value }))}
+                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                  />
+                </div>
+
+                <div className="form-group-perfil">
+                  <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Suplementos</label>
+                  <input
+                    type="text"
+                    value={formPaciente.suplementos}
+                    onChange={(e) => setFormPaciente(prev => ({ ...prev, suplementos: e.target.value }))}
+                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                  />
+                </div>
+
+                {/* Detalhamento do Objetivo */}
+                <div className="form-group-perfil">
+                  <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Detalhamento do Objetivo</label>
+                  <textarea
+                    rows="2"
+                    value={formPaciente.objetivo_texto}
+                    onChange={(e) => setFormPaciente(prev => ({ ...prev, objetivo_texto: e.target.value }))}
+                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', fontFamily: 'inherit', resize: 'vertical' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeAba === 'habitos' && (
+              <div className="aba-perfil-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group-perfil">
+                    <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Refeições / Dia</label>
+                    <input
+                      type="number"
+                      value={formPaciente.refeicoes_por_dia}
+                      onChange={(e) => setFormPaciente(prev => ({ ...prev, refeicoes_por_dia: e.target.value }))}
+                      style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                    />
+                  </div>
+                  <div className="form-group-perfil">
+                    <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Água (L/dia)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={formPaciente.litros_agua}
+                      onChange={(e) => setFormPaciente(prev => ({ ...prev, litros_agua: e.target.value }))}
+                      style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group-perfil">
+                    <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Horário Acorda</label>
+                    <input
+                      type="text"
+                      value={formPaciente.horario_acorda}
+                      onChange={(e) => setFormPaciente(prev => ({ ...prev, horario_acorda: e.target.value }))}
+                      style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                    />
+                  </div>
+                  <div className="form-group-perfil">
+                    <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Horário Dorme</label>
+                    <input
+                      type="text"
+                      value={formPaciente.horario_dorme}
+                      onChange={(e) => setFormPaciente(prev => ({ ...prev, horario_dorme: e.target.value }))}
+                      style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group-perfil">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-h)', cursor: 'pointer', marginBottom: '0.5rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={formPaciente.atividade_fisica}
+                      onChange={(e) => setFormPaciente(prev => ({ ...prev, atividade_fisica: e.target.checked }))}
+                      style={{ width: 'auto', transform: 'scale(1.15)' }}
+                    />
+                    Pratica Atividade Física
+                  </label>
+                  {formPaciente.atividade_fisica && (
+                    <input
+                      type="text"
+                      placeholder="Descrição da atividade (frequência, tipo)"
+                      value={formPaciente.atividade_fisica_descricao}
+                      onChange={(e) => setFormPaciente(prev => ({ ...prev, atividade_fisica_descricao: e.target.value }))}
+                      style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', marginTop: '0.4rem' }}
+                    />
+                  )}
+                </div>
+
+                <div className="form-group-perfil">
+                  <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-h)', display: 'block', marginBottom: '0.4rem' }}>Considerações Finais / Observações</label>
+                  <textarea
+                    rows="3"
+                    value={formPaciente.observacoes}
+                    onChange={(e) => setFormPaciente(prev => ({ ...prev, observacoes: e.target.value }))}
+                    style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', fontFamily: 'inherit', resize: 'vertical' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={savingPaciente}
+              className="btn-primary"
+              style={{
+                width: '100%',
+                marginTop: '1.5rem',
+                justifyContent: 'center',
+                padding: '0.75rem',
+                fontSize: '0.95rem',
+                gap: '0.5rem',
+                background: 'var(--accent)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                fontWeight: '700',
+                cursor: 'pointer'
+              }}
+            >
+              {savingPaciente ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} />
+                  <span>Salvando...</span>
+                </>
+              ) : (
+                <>
+                  <Save size={18} />
+                  <span>Salvar alterações</span>
+                </>
+              )}
+            </button>
+          </form>
         </section>
 
-        {/* Coluna Direita: Ficha Clínica, Hábitos e Histórico de Consultas */}
-        <div className="perfil-main-column" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          
-          {/* Ficha Clínica & Hábitos de Vida */}
-          <section className="perfil-card clinico-habitos-card" style={{ textAlign: 'left' }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1.75rem', color: 'var(--text-h)' }}>
-              <Activity size={22} style={{ color: 'var(--accent)' }} />
-              Ficha Clínica & Hábitos de Vida
-            </h2>
+        {/* SEÇÃO 2: CONSULTAS */}
+        <section className="perfil-card-novo section-consultas" style={{ background: 'white', borderRadius: '20px', border: '1px solid var(--border)', padding: '2rem', boxShadow: 'var(--shadow)', textAlign: 'left' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
+            <h2 style={{ fontSize: '1.3rem', fontWeight: '800', margin: 0, color: 'var(--text-h)' }}>Consultas & Evolução</h2>
+            <button 
+              className="btn-primary" 
+              onClick={() => setIsModalOpen(true)}
+              style={{ padding: '0.55rem 1rem', borderRadius: '10px', fontSize: '0.85rem', gap: '0.4rem', boxShadow: 'none' }}
+            >
+              <Plus size={16} />
+              <span>Nova Consulta</span>
+            </button>
+          </div>
 
-            <div className="clinico-habitos-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-              {/* Seção Clínica */}
-              <div className="clinico-seccao" style={{ display: 'flex', flexType: 'column', flexDirection: 'column', gap: '1.5rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '700', color: 'var(--accent)' }}>Dados Físicos & Clínicos</h3>
-                
-                {/* Indicadores Físicos */}
-                <div className="indicadores-fisicos-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem' }}>
-                  <div className="indicador-fisico-card" style={{ background: 'var(--bg)', padding: '1rem', borderRadius: '14px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <Scale size={20} style={{ color: 'var(--accent)' }} />
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <label style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.7, fontWeight: '600' }}>Peso Atual</label>
-                      <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--text-h)' }}>{paciente.peso_inicial ? `${paciente.peso_inicial} kg` : 'N/A'}</span>
-                    </div>
-                  </div>
+          {/* Gráfico de Evolução de Peso */}
+          <div className="grafico-card-wrapper" style={{ background: 'var(--bg)', padding: '1rem', borderRadius: '16px', border: '1px solid var(--border)', marginBottom: '1.75rem' }}>
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-h)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <TrendingUp size={16} style={{ color: 'var(--accent)' }} />
+              Evolução do Peso
+            </h3>
+            {renderGraficoPeso()}
+          </div>
 
-                  <div className="indicador-fisico-card" style={{ background: 'var(--bg)', padding: '1rem', borderRadius: '14px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <Ruler size={20} style={{ color: 'var(--accent)' }} />
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <label style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.7, fontWeight: '600' }}>Altura</label>
-                      <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--text-h)' }}>{paciente.altura ? `${paciente.altura} cm` : 'N/A'}</span>
-                    </div>
-                  </div>
-
-                  {imcCalculado && (
-                    <div className="indicador-fisico-card" style={{ background: imcCalculado.bgCor, padding: '1rem', borderRadius: '14px', border: `1px solid ${imcCalculado.cor}`, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <Activity size={20} style={{ color: imcCalculado.cor }} />
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <label style={{ fontSize: '0.75rem', color: 'var(--text-h)', opacity: 0.8, fontWeight: '700' }}>IMC: {imcCalculado.imc}</label>
-                        <span style={{ fontSize: '0.9rem', fontWeight: '800', color: imcCalculado.cor }}>{imcCalculado.classe}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Dados Clínicos Detalhados */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                    <span style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--text-h)' }}>Nível de Atividade:</span>
-                    <span style={{ background: 'var(--accent-bg)', color: 'var(--accent)', padding: '0.25rem 0.75rem', borderRadius: '50px', fontSize: '0.85rem', fontWeight: '700' }}>{paciente.nivel_atividade || 'Não informado'}</span>
-                  </div>
-
-                  {paciente.medicamentos && (
-                    <div style={{ background: 'var(--bg)', padding: '0.9rem 1.1rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                      <span style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--text-h)', display: 'block', marginBottom: '0.3rem' }}>Medicamentos de Uso Contínuo:</span>
-                      <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text)', lineHeight: 1.4 }}>{paciente.medicamentos}</p>
-                    </div>
-                  )}
-
-                  {paciente.suplementos && (
-                    <div style={{ background: 'var(--bg)', padding: '0.9rem 1.1rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                      <span style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--text-h)', display: 'block', marginBottom: '0.3rem' }}>Suplementação em Uso:</span>
-                      <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text)', lineHeight: 1.4 }}>{paciente.suplementos}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Patologias, Alergias e Restrições em Chips Premium */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
-                  
-                  {/* Patologias */}
-                  <div>
-                    <span style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--text-h)', display: 'block', marginBottom: '0.5rem' }}>Condições de Saúde / Patologias:</span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      {paciente.patologias && paciente.patologias.length > 0 && !paciente.patologias.includes('Nenhum') ? (
-                        paciente.patologias.map((pat, idx) => (
-                          <span key={idx} style={{ background: '#fee2e2', color: '#b91c1c', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', border: '1px solid #fecaca' }}>{pat}</span>
-                        ))
-                      ) : (
-                        <span style={{ background: '#f1f5f9', color: '#64748b', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600' }}>Nenhuma patologia cadastrada</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Restrições Alimentares */}
-                  <div>
-                    <span style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--text-h)', display: 'block', marginBottom: '0.5rem' }}>Restrições Alimentares:</span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      {paciente.restricoes_alimentares && paciente.restricoes_alimentares.length > 0 && !paciente.restricoes_alimentares.includes('Nenhum') ? (
-                        paciente.restricoes_alimentares.map((rest, idx) => (
-                          <span key={idx} style={{ background: '#ffedd5', color: '#c2410c', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', border: '1px solid #fed7aa' }}>{rest}</span>
-                        ))
-                      ) : (
-                        <span style={{ background: '#f1f5f9', color: '#64748b', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600' }}>Nenhuma restrição alimentar</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Alergias Alimentares */}
-                  <div>
-                    <span style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--text-h)', display: 'block', marginBottom: '0.5rem' }}>Alergias Alimentares:</span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      {paciente.alergias && paciente.alergias.length > 0 && !paciente.alergias.includes('Nenhum') ? (
-                        paciente.alergias.map((alerg, idx) => (
-                          <span key={idx} style={{ background: '#fef3c7', color: '#b45309', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', border: '1px solid #fde68a' }}>{alerg}</span>
-                        ))
-                      ) : (
-                        <span style={{ background: '#f1f5f9', color: '#64748b', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600' }}>Nenhuma alergia cadastrada</span>
-                      )}
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-
-              {/* Seção Hábitos de Vida */}
-              <div className="habitos-seccao" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', borderLeft: '1px solid var(--border)', paddingLeft: '2rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '700', color: 'var(--accent)' }}>Hábitos de Vida & Rotina</h3>
-
-                <div className="habitos-cards-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  
-                  <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: '14px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent)', fontWeight: '700', fontSize: '0.85rem' }}>
-                      <Apple size={16} />
-                      <span>Alimentação</span>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text)' }}>
-                      <strong>{paciente.refeicoes_por_dia || 'N/A'}</strong> refeições por dia
-                    </p>
-                  </div>
-
-                  <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: '14px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0284c7', fontWeight: '700', fontSize: '0.85rem' }}>
-                      <Droplet size={16} />
-                      <span>Hidratação</span>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text)' }}>
-                      <strong>{paciente.litros_agua ? `${paciente.litros_agua} Litros` : 'N/A'}</strong> de água/dia
-                    </p>
-                  </div>
-
-                  <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: '14px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#4f46e5', fontWeight: '700', fontSize: '0.85rem' }}>
-                      <Moon size={16} />
-                      <span>Sono</span>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text)', lineHeight: 1.4 }}>
-                      Acorda: <strong>{paciente.horario_acorda || 'N/A'}</strong><br />
-                      Dorme: <strong>{paciente.horario_dorme || 'N/A'}</strong>
-                    </p>
-                  </div>
-
-                  <div style={{ background: 'var(--bg)', padding: '1rem', borderRadius: '14px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--gold)', fontWeight: '700', fontSize: '0.85rem' }}>
-                      <Dumbbell size={16} />
-                      <span>Atividade Física</span>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text)', lineHeight: 1.3 }}>
-                      {paciente.atividade_fisica ? (
-                        <>
-                          <strong style={{ color: 'var(--accent)' }}>Sim</strong>
-                          <span style={{ display: 'block', fontSize: '0.75rem', opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={paciente.atividade_fisica_descricao}>{paciente.atividade_fisica_descricao}</span>
-                        </>
-                      ) : (
-                        <strong style={{ color: '#ef4444' }}>Não pratica</strong>
-                      )}
-                    </p>
-                  </div>
-
-                </div>
-
-                {/* Observações Gerais / Anotações */}
-                {paciente.observacoes && (
-                  <div style={{ background: '#f8fafc', padding: '1.1rem', borderRadius: '14px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: 'auto' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '700', fontSize: '0.9rem', color: 'var(--text-h)' }}>
-                      <Sparkles size={16} style={{ color: 'var(--gold)' }} />
-                      <span>Considerações Clínicas / Hábitos</span>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text)', lineHeight: 1.5 }}>
-                      {paciente.observacoes}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* Card do Histórico de Consultas */}
-          <section className="perfil-card consult-history">
-            <div className="section-header">
-              <h2>Histórico de Consultas</h2>
-            </div>
-
+          {/* Lista de Consultas */}
+          <div className="lista-consultas-wrapper">
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-h)' }}>Histórico de Consultas</h3>
+            
             {consultas.length > 0 ? (
-              <div className="consult-list">
+              <div className="consult-scroll-container" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '400px', overflowY: 'auto', paddingRight: '0.25rem' }}>
                 {consultas.map((c) => (
-                  <div key={c.id} className="consult-item">
-                    <div className="consult-date-badge">
-                      <Calendar size={16} />
-                      <span>{formatarData(c.data_consulta)}</span>
+                  <div key={c.id} className="consulta-item-premium" style={{ border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem', background: '#fcfdfd', position: 'relative' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <span style={{ fontSize: '0.9rem', fontWeight: '800', color: 'var(--accent)', background: 'var(--accent-bg)', padding: '0.2rem 0.6rem', borderRadius: '50px' }}>
+                        {formatarData(c.data_consulta)}
+                      </span>
+                      {c.proximo_retorno && (
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#c2410c', background: '#ffedd5', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>
+                          Retorno: {formatarData(c.proximo_retorno)}
+                        </span>
+                      )}
                     </div>
-                    
-                    <div className="consult-metrics">
-                      {c.peso && (
-                        <div className="metric">
-                          <Weight size={14} />
-                          <span><strong>Peso:</strong> {c.peso} kg</span>
-                        </div>
-                      )}
-                      {c.percentual_gordura && (
-                        <div className="metric">
-                          <FileText size={14} />
-                          <span><strong>Gordura:</strong> {c.percentual_gordura}%</span>
-                        </div>
-                      )}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', marginBottom: '0.75rem', background: 'white', padding: '0.5rem', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text)', opacity: 0.8, fontWeight: '600' }}>Peso</span>
+                        <strong style={{ fontSize: '0.85rem', color: 'var(--text-h)' }}>{c.peso ? `${c.peso} kg` : '-'}</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text)', opacity: 0.8, fontWeight: '600' }}>Cintura</span>
+                        <strong style={{ fontSize: '0.85rem', color: 'var(--text-h)' }}>{c.cintura ? `${c.cintura} cm` : '-'}</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text)', opacity: 0.8, fontWeight: '600' }}>Quadril</span>
+                        <strong style={{ fontSize: '0.85rem', color: 'var(--text-h)' }}>{c.quadril ? `${c.quadril} cm` : '-'}</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text)', opacity: 0.8, fontWeight: '600' }}>% Gordura</span>
+                        <strong style={{ fontSize: '0.85rem', color: 'var(--text-h)' }}>{c.percentual_gordura ? `${c.percentual_gordura}%` : '-'}</strong>
+                      </div>
                     </div>
 
                     {c.observacoes && (
-                      <div className="consult-notes">
-                        <strong>Observações:</strong>
-                        <p>{c.observacoes}</p>
-                      </div>
-                    )}
-
-                    {c.proximo_retorno && (
-                      <div className="next-return">
-                        <span><strong>Próximo Retorno:</strong> {formatarData(c.proximo_retorno)}</span>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text)', background: 'white', padding: '0.6rem', borderRadius: '8px', border: '1px dashed var(--border)' }}>
+                        <strong>Obs:</strong> {c.observacoes}
                       </div>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="empty-history">
-                <FileText size={40} />
-                <p>Nenhuma consulta registrada para este paciente.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2.5rem', background: '#f8fafc', borderRadius: '12px', border: '1px dashed var(--border)', color: 'var(--text)', opacity: 0.8 }}>
+                <ClipboardList size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+                <span>Nenhuma consulta cadastrada ainda.</span>
               </div>
             )}
-          </section>
-        </div>
+          </div>
+        </section>
+
+        {/* SEÇÃO 3: PLANOS ALIMENTARES */}
+        <section className="perfil-card-novo section-planos" style={{ background: 'white', borderRadius: '20px', border: '1px solid var(--border)', padding: '2rem', boxShadow: 'var(--shadow)', textAlign: 'left' }}>
+          <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+            <h2 style={{ fontSize: '1.3rem', fontWeight: '800', margin: '0 0 1rem 0', color: 'var(--text-h)' }}>Planos Alimentares</h2>
+            
+            {/* Botão Gerar Plano Alimentar */}
+            <button
+              type="button"
+              className="btn-primary"
+              style={{
+                width: '100%',
+                justifyContent: 'center',
+                padding: '0.75rem',
+                fontSize: '0.95rem',
+                gap: '0.5rem',
+                background: 'var(--gold)',
+                color: 'var(--text-h)',
+                border: 'none',
+                borderRadius: '12px',
+                fontWeight: '800',
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(212, 180, 131, 0.25)'
+              }}
+            >
+              <Apple size={18} />
+              <span>Gerar Plano Alimentar</span>
+            </button>
+          </div>
+
+          {/* Histórico de Planos Alimentares */}
+          <div>
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-h)' }}>Histórico de Planos</h3>
+            
+            {planos.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {planos.map((p) => (
+                  <div 
+                    key={p.id} 
+                    onClick={() => setSelectedPlano(p)}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '0.9rem 1.1rem',
+                      background: 'var(--bg)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    className="plano-historico-item"
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <FileText size={18} style={{ color: 'var(--accent)' }} />
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-h)' }}>Plano Alimentar</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.7 }}>Gerado em {formatarDataCompleta(p.created_at)}</span>
+                      </div>
+                    </div>
+                    <ChevronRight size={16} style={{ color: 'var(--text)', opacity: 0.5 }} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: '2.5rem', background: '#f8fafc', borderRadius: '12px', border: '1px dashed var(--border)', textAlign: 'center', color: 'var(--text)', opacity: 0.8 }}>
+                <Apple size={32} style={{ marginBottom: '0.5rem', opacity: 0.5, display: 'inline-block' }} />
+                <p style={{ margin: 0, fontSize: '0.85rem' }}>Nenhum plano alimentar gerado ainda.</p>
+              </div>
+            )}
+          </div>
+        </section>
+
       </div>
+
+      {/* MODAL: NOVA CONSULTA */}
+      {isModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '450px', width: '90%', padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '800' }}>Registrar Nova Consulta</h2>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {consultaError && (
+              <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #fecaca', marginBottom: '1rem', fontSize: '0.85rem', fontWeight: '600' }}>
+                {consultaError}
+              </div>
+            )}
+
+            <form onSubmit={handleSalvarConsulta} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="form-group">
+                <label>Data da Consulta *</label>
+                <input 
+                  type="date" 
+                  required
+                  value={formConsulta.data_consulta}
+                  onChange={(e) => setFormConsulta(prev => ({ ...prev, data_consulta: e.target.value }))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Peso Atual (kg) *</label>
+                <input 
+                  type="number" 
+                  step="0.1" 
+                  required
+                  placeholder="Ex: 75.4"
+                  value={formConsulta.peso}
+                  onChange={(e) => setFormConsulta(prev => ({ ...prev, peso: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label>Cintura (cm)</label>
+                  <input 
+                    type="number" 
+                    placeholder="Opcional"
+                    value={formConsulta.cintura}
+                    onChange={(e) => setFormConsulta(prev => ({ ...prev, cintura: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Quadril (cm)</label>
+                  <input 
+                    type="number" 
+                    placeholder="Opcional"
+                    value={formConsulta.quadril}
+                    onChange={(e) => setFormConsulta(prev => ({ ...prev, quadril: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>% de Gordura</label>
+                <input 
+                  type="number" 
+                  step="0.1"
+                  placeholder="Opcional"
+                  value={formConsulta.percentual_gordura}
+                  onChange={(e) => setFormConsulta(prev => ({ ...prev, percentual_gordura: e.target.value }))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Observações</label>
+                <textarea 
+                  rows="3" 
+                  placeholder="Anotações gerais sobre a consulta..."
+                  value={formConsulta.observacoes}
+                  onChange={(e) => setFormConsulta(prev => ({ ...prev, observacoes: e.target.value }))}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg)', fontFamily: 'inherit', resize: 'vertical' }}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Próximo Retorno</label>
+                <input 
+                  type="date" 
+                  value={formConsulta.proximo_retorno}
+                  onChange={(e) => setFormConsulta(prev => ({ ...prev, proximo_retorno: e.target.value }))}
+                />
+              </div>
+
+              <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
+                <button 
+                  type="button" 
+                  className="btn-secondary" 
+                  onClick={() => setIsModalOpen(false)}
+                  style={{ padding: '0.65rem 1.25rem', borderRadius: '10px' }}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={savingConsulta}
+                  className="btn-primary"
+                  style={{ padding: '0.65rem 1.5rem', borderRadius: '10px', boxShadow: 'none' }}
+                >
+                  {savingConsulta ? 'Salvando...' : 'Salvar consulta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: VISUALIZADOR DE PLANO ALIMENTAR */}
+      {selectedPlano && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '600px', width: '90%', padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '800' }}>Visualizar Plano Alimentar</h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text)', opacity: 0.8 }}>Gerado em {formatarDataCompleta(selectedPlano.created_at)}</span>
+              </div>
+              <button 
+                onClick={() => setSelectedPlano(null)} 
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ maxHeight: '450px', overflowY: 'auto', textAlign: 'left', paddingRight: '0.5rem' }}>
+              {selectedPlano.conteudo ? (
+                typeof selectedPlano.conteudo === 'string' ? (
+                  <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{selectedPlano.conteudo}</p>
+                ) : (
+                  <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0, lineHeight: 1.6 }}>
+                    {JSON.stringify(selectedPlano.conteudo, null, 2)}
+                  </pre>
+                )
+              ) : (
+                <p>Nenhum conteúdo salvo para este plano alimentício.</p>
+              )}
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              <button 
+                className="btn-secondary" 
+                onClick={() => setSelectedPlano(null)}
+                style={{ padding: '0.65rem 1.25rem', borderRadius: '10px' }}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
-
