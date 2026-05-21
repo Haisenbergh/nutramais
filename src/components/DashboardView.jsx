@@ -271,7 +271,7 @@ export default function DashboardView({ session, onSelectPatient }) {
       <header className="dashboard-view-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ textAlign: 'left' }}>
           <h1 style={{ margin: 0, fontSize: '2.25rem', fontWeight: '800', color: 'var(--text-h)', letterSpacing: '-0.025em' }}>
-            {nomeNutri ? `Bem-vindo(a), ${nomeNutri}!` : 'Bem-vindo(a)!'}
+            {nomeNutri ? `Bem-vindo, ${nomeNutri}!` : 'Bem-vindo!'}
           </h1>
           <p className="welcome-text" style={{ margin: '0.5rem 0 0 0', color: '#64748b', fontSize: '1rem', fontWeight: '500' }}>
             Aqui está um resumo da sua clínica.
