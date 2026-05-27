@@ -1,51 +1,71 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
-    <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#e8c97a"/>
-      <stop offset="50%" stop-color="#D4B483"/>
-      <stop offset="100%" stop-color="#a87d3a"/>
+    <!-- Gradiente dourado metálico para a cruz e a folha dourada -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F3E5AB" />
+      <stop offset="30%" stop-color="#D4B483" />
+      <stop offset="70%" stop-color="#C5A059" />
+      <stop offset="100%" stop-color="#996515" />
     </linearGradient>
-    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#f0f7f0"/>
-    </radialGradient>
-    <filter id="shadow">
-      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="rgba(0,0,0,0.35)"/>
+    
+    <!-- Gradiente verde escuro para as folhas externas -->
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#388E3C" />
+      <stop offset="50%" stop-color="#2E7D32" />
+      <stop offset="100%" stop-color="#1B5E20" />
+    </linearGradient>
+    
+    <!-- Gradiente verde claro para a folha do topo direito -->
+    <linearGradient id="lightGreenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#81C784" />
+      <stop offset="100%" stop-color="#4CAF50" />
+    </linearGradient>
+
+    <!-- Filtro de sombra suave -->
+    <filter id="dropShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-opacity="0.15" />
     </filter>
   </defs>
 
-  <!-- Fundo circular branco suave -->
-  <circle cx="50" cy="50" r="49" fill="url(#bgGrad)" stroke="#2E7D32" stroke-width="1.5"/>
+  <!-- Coroa de Folhas Verdes Externa (Círculo de folhas) -->
+  <!-- Folha 1 (Esquerda/Superior): curva do topo até a base esquerda -->
+  <path d="M 256 32 C 160 32 64 96 48 200 C 32 304 96 416 192 464 C 180 430 180 370 200 320 C 140 330 90 280 80 220 C 70 160 110 100 180 70 C 210 58 240 50 256 32 Z" fill="url(#greenGrad)" />
+  
+  <!-- Folha 2 (Direita/Inferior): curva da base até o topo direito -->
+  <path d="M 256 480 C 352 480 448 416 464 312 C 480 208 416 96 320 48 C 332 82 332 142 312 192 C 372 182 422 232 432 292 C 442 352 402 412 333 442 C 303 454 272 462 256 480 Z" fill="url(#greenGrad)" />
+  
+  <!-- Detalhes das nervuras das folhas externas (linhas mais claras) -->
+  <path d="M 256 32 C 180 60 110 130 80 220" stroke="#81C784" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.6" />
+  <path d="M 170 85 C 130 115 105 160 95 210" stroke="#81C784" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.5" />
+  <path d="M 200 130 C 170 160 150 200 140 240" stroke="#81C784" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.5" />
+  
+  <path d="M 256 480 C 332 452 402 382 432 292" stroke="#81C784" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.6" />
+  <path d="M 342 427 C 382 397 407 352 417 302" stroke="#81C784" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.5" />
+  <path d="M 312 382 C 342 352 362 312 372 272" stroke="#81C784" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.5" />
 
-  <!-- Folha grande esquerda superior (espiral) -->
-  <path d="M18 38 C12 20 28 8 42 14 C35 22 30 32 34 44 C28 42 22 40 18 38 Z" fill="#2E7D32"/>
-  <!-- nervuras -->
-  <path d="M18 38 C25 28 33 20 42 14" stroke="#4CAF50" stroke-width="0.9" fill="none" opacity="0.7"/>
-  <path d="M22 33 C27 28 32 22 38 17" stroke="#81C784" stroke-width="0.6" fill="none" opacity="0.5"/>
-  <path d="M20 38 C26 33 30 27 36 21" stroke="#81C784" stroke-width="0.6" fill="none" opacity="0.5"/>
+  <!-- Cruz Dourada Central com Cantos Arredondados -->
+  <g filter="url(#dropShadow)">
+    <rect x="226" y="156" width="60" height="200" rx="20" fill="url(#goldGrad)" />
+    <rect x="156" y="226" width="200" height="60" rx="20" fill="url(#goldGrad)" />
+  </g>
+  
+  <!-- Pequeno círculo no topo direito com folhinha verde -->
+  <g transform="translate(370, 80)" filter="url(#dropShadow)">
+    <!-- Círculo Dourado -->
+    <circle cx="25" cy="25" r="25" fill="none" stroke="url(#goldGrad)" stroke-width="5" />
+    <circle cx="25" cy="25" r="10" fill="url(#goldGrad)" opacity="0.2" />
+    <!-- Pequena Folha Verde dentro -->
+    <path d="M 25 10 C 32 15 35 23 25 35 C 15 23 18 15 25 10 Z" fill="url(#lightGreenGrad)" />
+    <path d="M 25 10 L 25 30" stroke="#1B5E20" stroke-width="1.5" fill="none" />
+  </g>
 
-  <!-- Folha grande direita superior -->
-  <path d="M82 38 C88 20 72 8 58 14 C65 22 70 32 66 44 C72 42 78 40 82 38 Z" fill="#2E7D32"/>
-  <path d="M82 38 C75 28 67 20 58 14" stroke="#4CAF50" stroke-width="0.9" fill="none" opacity="0.7"/>
-  <path d="M78 33 C73 28 68 22 62 17" stroke="#81C784" stroke-width="0.6" fill="none" opacity="0.5"/>
-
-  <!-- Folha esquerda inferior (espiral base) -->
-  <path d="M22 62 C10 72 14 88 28 90 C28 80 30 70 38 64 C32 64 27 63 22 62 Z" fill="#388E3C"/>
-  <path d="M22 62 C26 70 28 80 28 90" stroke="#4CAF50" stroke-width="0.9" fill="none" opacity="0.7"/>
-
-  <!-- Folha direita inferior -->
-  <path d="M78 62 C90 72 86 88 72 90 C72 80 70 70 62 64 C68 64 73 63 78 62 Z" fill="#388E3C"/>
-  <path d="M78 62 C74 70 72 80 72 90" stroke="#4CAF50" stroke-width="0.9" fill="none" opacity="0.7"/>
-
-  <!-- Folha pequena dourada inferior centro -->
-  <path d="M50 84 C44 76 43 68 50 62 C57 68 56 76 50 84 Z" fill="#D4B483"/>
-  <path d="M50 84 C50 76 50 68 50 62" stroke="#a87d3a" stroke-width="0.8" fill="none" opacity="0.8"/>
-
-  <!-- Pequeno círculo topo direito (detalhe do logo) -->
-  <circle cx="74" cy="18" r="5" fill="none" stroke="#D4B483" stroke-width="1.5"/>
-  <circle cx="74" cy="18" r="2.5" fill="#D4B483"/>
-
-  <!-- Cruz central dourada -->
-  <rect x="44" y="30" width="12" height="40" rx="3" fill="url(#goldGrad)" filter="url(#shadow)"/>
-  <rect x="30" y="44" width="40" height="12" rx="3" fill="url(#goldGrad)" filter="url(#shadow)"/>
+  <!-- Folha Dourada no Canto Inferior Direito -->
+  <g transform="translate(290, 310)" filter="url(#dropShadow)">
+    <!-- Corpo da folha dourada -->
+    <path d="M 10 100 C 50 100 90 70 100 10 C 70 40 40 50 10 100 Z" fill="url(#goldGrad)" />
+    <!-- Nervura central da folha dourada -->
+    <path d="M 10 100 C 40 70 70 45 100 10" stroke="#996515" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.7" />
+    <path d="M 40 70 C 50 55 65 50 75 45" stroke="#996515" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.5" />
+    <path d="M 28 82 C 38 72 50 70 60 68" stroke="#996515" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.5" />
+  </g>
 </svg>

@@ -538,11 +538,38 @@
   transform: translateX(3px);
 }
 
-/* Tela de Perfil do Paciente */
 .perfil-container {
-  max-width: 1200px;
+  max-width: 1550px;
   margin: 0 auto;
 }
+
+.perfil-grid-novo {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.3fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (max-width: 1400px) {
+  .perfil-grid-novo {
+    grid-template-columns: 1fr 1.1fr;
+  }
+  .perfil-grid-novo .section-planos {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 900px) {
+  .perfil-grid-novo {
+    grid-template-columns: 1fr;
+  }
+  .perfil-grid-novo .section-dados,
+  .perfil-grid-novo .section-consultas,
+  .perfil-grid-novo .section-planos {
+    grid-column: span 1;
+  }
+}
+
 
 .perfil-header {
   display: flex;
@@ -1151,5 +1178,42 @@
 .consult-scroll-container::-webkit-scrollbar-thumb {
   background-color: var(--border);
   border-radius: 10px;
+}
+
+/* Geração de Dieta com IA - Estilos Adicionais */
+.plano-edicao-container {
+  animation: fadeIn 0.4s ease-out;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+}
+
+.refeicao-card-edit {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.refeicao-card-edit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.plano-input-item:focus {
+  outline: none;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-bg) !important;
+  background: white !important;
+}
+
+.plano-tabs-dias::-webkit-scrollbar {
+  display: none;
+}
+
+.plano-historico-item:hover {
+  transform: translateX(4px);
+  border-color: var(--accent) !important;
+  background: white !important;
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.08) !important;
+}
+
+.plano-visualizador-rich {
+  animation: fadeIn 0.4s ease-out;
 }
 
